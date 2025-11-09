@@ -1,0 +1,21 @@
+{
+  "date": "2025-11-08",
+  "symbol": "EURUSD=X",
+  "fibo_context": {
+    "ratio": 0.8147782067354579,
+    "phase": "zona media",
+    "price": 1.1570056676864624,
+    "high": 1.1871408224105835,
+    "low": 1.0244431495666504
+  },
+  "sample_values": [
+    1.1519144773483276,
+    1.1485539674758911,
+    1.1496764421463013,
+    1.1549211740493774,
+    1.1570056676864624
+  ],
+  "decision_raw": "[Z3 Parse Error] Expresi\u00f3n de l\u00edmite inv\u00e1lida: unsupported operand type(s) for ** or pow(): 'LpAffineExpression' and 'int'",
+  "opportunities": [],
+  "timestamp": "2025-11-08T23:25:59.955493"
+}

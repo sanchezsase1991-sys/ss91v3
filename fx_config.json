@@ -1,0 +1,19 @@
+{
+  "base_pair": "EURUSD=X",
+  "related_assets": [
+    {"symbol": "GBPUSD=X", "relation": "directa", "notes": "Alta correlación con EUR/USD"},
+    {"symbol": "USDJPY=X", "relation": "inversa", "notes": "Suele moverse diferente"},
+    {"symbol": "USDCHF=X", "relation": "inversa", "notes": "refugio/flow"},
+    {"symbol": "EURGBP=X", "relation": "directa", "notes": "cruz europeo"},
+    {"symbol": "^DAX", "relation": "directa", "notes": "índice europeo"},
+    {"symbol": "^GSPC", "relation": "moderada", "notes": "S&P 500 como referencia global"}
+  ],
+  "indicators": {
+    "rsi_length": 14,
+    "ema_length": 50,
+    "atr_length": 14,
+    "momentum_threshold_high": 70,
+    "momentum_threshold_low": 30,
+    "lookback_period_days": 180
+  }
+}
