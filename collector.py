@@ -30,11 +30,11 @@ def main():
             "price": payload.get("fibo",{}).get("current_price"),
             "fibo_nearest": payload.get("fibo",{}).get("nearest_level")
         }
-        send_to_ntfy(f"SS91-V3 Snapshot {today}", json.dumps(summary))
+        send_to_ntfy(f"ss91_alertas Snapshot {today}", json.dumps(summary))
         log.info("Snapshot pushed and notified.")
     except Exception as e:
         log.error("Collector failed: %s", e)
-        send_to_ntfy("SS91-V3 Collector ERROR", str(e))
+        send_to_ntfy("ss91_alertas Collector ERROR", str(e))
     finally:
         log.info("Collector finished.")
 
