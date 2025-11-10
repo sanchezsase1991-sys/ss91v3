@@ -1,42 +1,43 @@
-#!/usr/bin/env python3
-import os, json, logging
-from datetime import datetime
-from ss91_v3.data_pipeline import get_all_marginal_factors, send_to_ntfy, upload_to_github
+import os
+import json
+import datetime
+import yfinance as yf
+# Asegúrate de importar la nueva data_pipeline que te di
+from ss91_v3.data_pipeline import fetch_ohlcv, get_all_marginal_factors
+from ss91_v3.utils import upload_to_github, log
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s — %(name)s — %(levelname)s — %(message)s")
-log = logging.getLogger("collector")
-
-RESULTS_DIR = os.path.join(os.getcwd(), "results", "snapshots")
-os.makedirs(RESULTS_DIR, exist_ok=True)
-SYMBOL = os.getenv("SYMBOL", "EURUSD=X")
+RESULTS_DIR = "results/snapshots"
 
 def main():
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    filename = f"{today}.json"
-    local_path = os.path.join(RESULTS_DIR, filename)
-    log.info("Collector starting for %s", today)
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    today = datetime.date.today().isoformat()
+    symbol = os.getenv("SYMBOL", "EURUSD=X")
+    snapshot_path = os.path.join(RESULTS_DIR, f"{today}.json") # Definido aquí
+
     try:
-        payload = get_all_marginal_factors(symbol=SYMBOL)
-        # save local
-        with open(local_path, "w") as f:
-            json.dump(payload, f, indent=2)
-        log.info("Snapshot saved local: %s", local_path)
-        # upload to GitHub (path inside repo)
-        repo_path = f"snapshots/{filename}"
-        upload_to_github(repo_path, json.dumps(payload, indent=2))
-        # send summary to ntfy (trim)
-        summary = {
-            "symbol": payload.get("symbol"),
-            "price": payload.get("fibo",{}).get("current_price"),
-            "fibo_nearest": payload.get("fibo",{}).get("nearest_level")
-        }
-        send_to_ntfy(f"ss91_alertas Snapshot {today}", json.dumps(summary))
-        log.info("Snapshot pushed and notified.")
-    except Exception as e:
-        log.error("Collector failed: %s", e)
-        send_to_ntfy("ss91_alertas Collector ERROR", str(e))
-    finally:
+        log.info(f"Collector starting for {today}")
+        
+        # Estas funciones ahora vienen de tu nueva data_pipeline
+        df = fetch_ohlcv(symbol, period="1y") 
+        payload = get_all_marginal_factors(df)
+
+        with open(snapshot_path, "w", encoding="utf-8") as f:
+            # Usamos un serializador de pandas si hay objetos Timestamp
+            json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
+
+        upload_to_github(
+            f"snapshots/{today}.json",
+            json.dumps(payload, indent=2, ensure_ascii=False, default=str),
+        )
+
+        # --- msg = ... (ELIMINADO) ---
+        # --- send_to_ntfy(...) (ELIMINADO) ---
+        
+        log.info("Snapshot saved successfully to GitHub.")
         log.info("Collector finished.")
+    except Exception as e:
+        log.error(f"Collector error: {e}")
+        raise
 
 if __name__ == "__main__":
     main()
