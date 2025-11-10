@@ -11,7 +11,7 @@ on:
     inputs:
       run_mode:
         description: "Modo de ejecución"
-        required: true
+        required: false
         default: "manual"
         type: choice
         options:
