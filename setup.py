@@ -21,6 +21,7 @@ setup(
         "scikit-learn",
         "tqdm",
         "fredapi"
+        "vaderSentiment",
     ],
     python_requires=">=3.12",
 )
