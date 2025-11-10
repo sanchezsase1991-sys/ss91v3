@@ -2,14 +2,13 @@ name: SS91-V3 Daily Cycle
 
 on:
   schedule:
-    # Se ejecuta a las 10:00 y 12:00 UTC todos los días
     - cron: "0 10 * * *"
     - cron: "0 12 * * *"
   workflow_dispatch:
     inputs:
       run_mode:
         description: "Modo de ejecución"
-        required: true
+        required: false
         default: "manual"
         type: choice
         options:
@@ -17,6 +16,7 @@ on:
           - test_full_cycle
 
 jobs:
+  # ... (El job 'setup' no cambia) ...
   setup:
     runs-on: ubuntu-latest
     outputs:
@@ -34,12 +34,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
+          # --- CAMBIO IMPORTANTE ---
           python-version: '3.12'
       
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # CAMBIO 1: Usa setup.py para instalar todo (excepto Sherloock)
           pip install . 
           pip install git+https://github.com/sanchezsase1991-sys/sherloock.git
       
@@ -49,16 +49,14 @@ jobs:
           echo "GITHUB_USER=${{ github.repository_owner }}" >> .env
           echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> .env
           echo "DATA_REPO=ss91v3" >> .env
-          # --- API KEYS PARA EL COLECTOR (Paso 1) ---
           echo "FRED_API_KEY=${{ secrets.FRED_API_KEY }}" >> .env
           echo "REDDIT_CLIENT_ID=${{ secrets.REDDIT_CLIENT_ID }}" >> .env
-          echo "REDDIT_CLIENT_SECRET=${{ secrets.REDDIT_CLIENT_SECRET }}" >> .env
+          echo "REDDIT_CLIENT_SECRET=${{ secrets.REDDIT_SECRET }}" >> .env
       
       - name: Run collector
         run: python collector.py
       
       - name: Upload collector result (snapshot)
-        # CAMBIO 2: Sube el snapshot.json para que el decitor lo use
         uses: actions/upload-artifact@v4
         with:
           name: snapshot-data
@@ -72,12 +70,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
+          # --- CAMBIO IMPORTANTE ---
           python-version: '3.12'
       
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # CAMBIO 1: Usa setup.py
           pip install .
           pip install git+https://github.com/sanchezsase1991-sys/sherloock.git
       
@@ -87,17 +85,14 @@ jobs:
           echo "GITHUB_USER=${{ github.repository_owner }}" >> .env
           echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> .env
           echo "DATA_REPO=ss91v3" >> .env
-          # (No se necesitan las keys de API aquí, solo en el collector)
       
       - name: Download snapshot data
-        # CAMBIO 3: Descarga el snapshot.json en el mismo directorio
         uses: actions/download-artifact@v4
         with:
           name: snapshot-data
           path: results/snapshots/
       
       - name: Run decitor
-        # Ahora, cuando se ejecute, encontrará el snapshot
         run: python decitor.py
       
       - name: Upload decitor result
