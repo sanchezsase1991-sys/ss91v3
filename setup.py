@@ -6,6 +6,7 @@ setup(
     description="SS91-V3: Sentiment & Signal system with Sherloock adapter",
     packages=find_packages(),
     include_package_data=True,
+    
     install_requires=[
         "python-dotenv",
         "yfinance",
@@ -14,14 +15,14 @@ setup(
         "pandas-ta",
         "requests",
         "pytrends",
-        "textblob",
-        "snscrape",
-        "joblib",
-        "prophet",
-        "scikit-learn",
-        "tqdm",
-        "fredapi"
         "vaderSentiment",
+        "scikit-learn",
+        "z3-solver",
+        "pulp",
+        "sympy",
+        "psutil",
     ],
+    
+    # Esta línea es correcta y exige Python 3.12 o superior
     python_requires=">=3.12",
 )
