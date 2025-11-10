@@ -1,5 +1,8 @@
 name: SS91-V3 Daily Cycle
 
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: "0 10 * * *"
@@ -8,7 +11,7 @@ on:
     inputs:
       run_mode:
         description: "Modo de ejecución"
-        required: false
+        required: true
         default: "manual"
         type: choice
         options:
