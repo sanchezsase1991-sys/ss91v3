@@ -150,7 +150,10 @@ def get_all_marginal_factors(df):
         # 3. Obtener los últimos factores técnicos del DataFrame
         # .iloc[-1] toma la última fila (los datos de hoy)
         latest_technicals = df.iloc[-1].to_dict()
-        
+               
+        # Añadimos los 5 últimos precios de cierre para el comando "forecast"
+        latest_technicals["recent_prices"] = df["close"].iloc[-5:].tolist()
+
         # 4. Calcular Fibonacci (de tu código original)
         fibo = compute_fibonacci_levels(df)
 
