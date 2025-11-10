@@ -8,7 +8,6 @@ setup(
     include_package_data=True,
     install_requires=[
         "python-dotenv",
-        "supabase",
         "yfinance",
         "pandas",
         "numpy",
@@ -20,9 +19,8 @@ setup(
         "joblib",
         "prophet",
         "scikit-learn",
-        "ntfy",
         "tqdm",
         "fredapi"
     ],
-    python_requires=">=3.9",
+    python_requires=">=3.12",
 )
