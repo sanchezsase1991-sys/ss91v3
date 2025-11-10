@@ -71,10 +71,16 @@ def main():
             "timestamp": datetime.utcnow().isoformat()
         }
 
-        # save local
-        local_path = os.path.join(RESULTS_DIR, f"{today}.json")
-        with open(local_path, "w") as f:
-            json.dump(decision_record, f, indent=2)
+        # ensure results/decisions directory exists
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
+local_path = os.path.join(RESULTS_DIR, f"{today}.json")
+try:
+    with open(local_path, "w", encoding="utf-8") as f:
+        json.dump(decision_record, f, indent=2, ensure_ascii=False)
+    log.info(f"Decision JSON saved locally at {local_path}")
+except Exception as e:
+    log.error(f"Error saving decision locally: {e}")
 
         # upload json to github
         upload_to_github(f"decisions/{today}.json", json.dumps(decision_record, indent=2))
