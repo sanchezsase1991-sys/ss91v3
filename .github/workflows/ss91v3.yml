@@ -1,4 +1,4 @@
-name: SS91-V3 Daily Cycle
+name: ss91_alertas Daily Cycle
 
 on:
   schedule:
@@ -9,7 +9,7 @@ on:
       run_mode:
         description: "Modo de ejecución"
         required: true
-        default: "manual"
+        default: "automatic"
         type: choice
         options:
           - manual
@@ -45,7 +45,7 @@ jobs:
           echo "NTFY_TOPIC=${{ secrets.NTFY_TOPIC }}" >> .env
           echo "GITHUB_USER=${{ github.repository_owner }}" >> .env
           echo "GITHUB_TOKEN=${{ secrets.DATA_REPO_TOKEN }}" >> .env
-          echo "DATA_REPO=SS91-V3-DATA" >> .env
+          echo "DATA_REPO=ss91_alertas-DATA" >> .env
       - name: Run collector
         run: python collector.py
       - name: Upload artifact
@@ -75,7 +75,7 @@ jobs:
           echo "NTFY_TOPIC=${{ secrets.NTFY_TOPIC }}" >> .env
           echo "GITHUB_USER=${{ github.repository_owner }}" >> .env
           echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> .env
-          echo "DATA_REPO=ss91v3" >> .env
+          echo "DATA_REPO=ss91_alertas" >> .env
       - name: Run decitor
         run: python decitor.py
       - name: Upload artifact
