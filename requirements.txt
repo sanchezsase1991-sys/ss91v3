@@ -9,3 +9,4 @@ pulp
 sympy
 psutil
 vaderSentiment
+pytrends
