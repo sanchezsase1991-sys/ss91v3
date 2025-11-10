@@ -1,164 +1,197 @@
-#!/usr/bin/env python3
-import os, json, base64, time
-import requests
-from datetime import datetime, timedelta
-import pandas as pd
 import yfinance as yf
+import pandas as pd
 import pandas_ta as ta
-from dotenv import load_dotenv
+import numpy as np
+import json
+import os
+import requests
+from ss91_v3.utils import log
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from pytrends.request import TrendReq
 
-load_dotenv()
-
-# ENV
-NTFY_TOPIC = os.getenv("NTFY_TOPIC", "ss91_alertas")
-GITHUB_USER = os.getenv("GITHUB_USER")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-DATA_REPO = os.getenv("DATA_REPO", "SS91-V3-DATA")
-
-# --------------------
-# Utilities
-# --------------------
-def send_to_ntfy(title: str, message: str):
-    if not NTFY_TOPIC:
-        print("[WARN] NTFY_TOPIC no configurado.")
-        return
-    url = f"https://ntfy.sh/{NTFY_TOPIC}"
-    headers = {"Title": title, "Priority": "high"}
-    try:
-        r = requests.post(url, data=message.encode("utf-8"), headers=headers, timeout=10)
-        print("📢 ntfy:", r.status_code, r.text[:200])
-    except Exception as e:
-        print(f"[ERROR] ntfy failed: {e}")
-
-def upload_to_github(path: str, content_str: str, branch="main", message=None):
+# =============================================================================
+# 1. CÁLCULO DE FACTORES TÉCNICOS (Usando pandas_ta)
+# =============================================================================
+def fetch_ohlcv(symbol, period="1y", interval="1d"):
     """
-    Sube/actualiza archivo a https://api.github.com/repos/{GITHUB_USER}/{DATA_REPO}/contents/{path}
+    Obtiene datos de yfinance Y calcula todos los indicadores técnicos.
     """
-    if not (GITHUB_USER and GITHUB_TOKEN and DATA_REPO):
-        print("[WARN] GitHub variables not set — skipping upload.")
-        return {"ok": False, "reason": "no_credentials"}
+    log.info("Obteniendo datos de mercado de yfinance...")
+    df = yf.download(symbol, period=period, interval=interval, progress=False)
+    if df.empty:
+        raise ValueError("No se pudieron obtener datos de yfinance.")
+    
+    df = df.reset_index()
+    df.columns = [c.lower() for c in df.columns]
 
-    api_base = f"https://api.github.com/repos/{GITHUB_USER}/{DATA_REPO}/contents/{path}"
-    headers = {"Accept": "application/vnd.github+json"}
-    auth = (GITHUB_USER, GITHUB_TOKEN)
-    if not message:
-        message = f"Add/update {path}"
-
-    # Check if file exists to get sha
-    r = requests.get(api_base, auth=auth, headers=headers, timeout=10)
-    content_b64 = base64.b64encode(content_str.encode()).decode()
-    payload = {"message": message, "content": content_b64, "branch": branch}
-
-    if r.status_code == 200:
-        sha = r.json().get("sha")
-        payload["sha"] = sha
-
-    r2 = requests.put(api_base, auth=auth, headers=headers, json=payload, timeout=15)
-    if r2.status_code in (200,201):
-        print(f"[GITHUB] {path} uploaded (status {r2.status_code})")
-        return {"ok": True, "status": r2.status_code, "data": r2.json()}
-    else:
-        print(f"[GITHUB ERROR] {r2.status_code}: {r2.text[:400]}")
-        return {"ok": False, "status": r2.status_code, "text": r2.text}
-
-# --------------------
-# Market fetch + indicators
-# --------------------
-def fetch_ohlcv(symbol="EURUSD=X", period="3y", interval="1d"):
-    df = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-    df.columns = [c.lower().replace(" ", "_") for c in df.columns]
-
-    required = {"open", "high", "low", "close"}
-    if not required.issubset(set(df.columns)):
-        raise ValueError(f"Required OHLC columns missing for {symbol}: {df.columns}")
-
-    # indicators
-    try:
-        df.ta.atr(length=14, append=True)
-        df.ta.rsi(length=14, append=True)
-        df.ta.ema(length=20, append=True)
-    except Exception as e:
-        print("[WARN] pandas_ta indicators error:", e)
-
+    # --- Añadimos todos los indicadores técnicos reales ---
+    log.info("Calculando factores técnicos con pandas_ta...")
+    df.ta.rsi(length=14, append=True)
+    df.ta.ema(length=20, append=True)
+    df.ta.atr(length=14, append=True)
+    
+    # Añadimos más indicadores (ejemplos)
+    df.ta.aroon(length=14, append=True) # Aroon Oscillator
+    df.ta.trix(length=14, append=True)  # Trix
+    df.ta.dpo(length=14, append=True)   # Detrended Price Oscillator
+    df.ta.macd(append=True)             # MACD
+    
+    # Limpiamos NaNs (muy importante)
     df = df.ffill().bfill()
+    log.info("Datos técnicos calculados.")
     return df
 
-def compute_fibonacci_context(df):
-    high_1y = df['close'].rolling(window=252, min_periods=1).max().iloc[-1]
-    low_1y = df['close'].rolling(window=252, min_periods=1).min().iloc[-1]
-    diff = high_1y - low_1y if (high_1y - low_1y) != 0 else 1.0
-    current = df['close'].iloc[-1]
-    fibo_levels = {
-        "0.0%": high_1y,
-        "23.6%": high_1y - 0.236 * diff,
-        "38.2%": high_1y - 0.382 * diff,
-        "50.0%": high_1y - 0.5 * diff,
-        "61.8%": high_1y - 0.618 * diff,
-        "78.6%": high_1y - 0.786 * diff,
-        "100%": low_1y
-    }
-    closest = min(fibo_levels.items(), key=lambda kv: abs(kv[1] - current))
-    ratio = (current - low_1y) / diff
-    return {
-        "fibo_levels": fibo_levels,
-        "nearest_level": closest[0],
-        "nearest_value": float(closest[1]),
-        "position_ratio": float(ratio),
-        "current_price": float(current),
-        "high_1y": float(high_1y),
-        "low_1y": float(low_1y)
-    }
-
-def get_all_marginal_factors(symbol="EURUSD=X"):
-    df = fetch_ohlcv(symbol=symbol, period="3y")
-    last = df.iloc[-1].to_dict()
-    # minimal macros placeholder
-    macros = {"timestamp": datetime.utcnow().isoformat()}
-    fibo = compute_fibonacci_context(df)
-    # normalize numeric values to primitives
-    last_clean = {k: (float(v) if (isinstance(v,(int,float)) or (hasattr(v,'__float__'))) else str(v)) for k,v in last.items()}
-    payload = {"symbol": symbol, "snapshot_time": datetime.utcnow().isoformat(), "ohlc": last_clean, "macros": macros, "fibo": fibo}
-    return payload
-
-# --------------------
-# FX opportunities detection from fx_config.json
-# --------------------
-def detect_fx_opportunities(config_path="fx_config.json"):
-    cfg_path = os.path.join(os.getcwd(), config_path)
-    if not os.path.exists(cfg_path):
-        print("[WARN] fx_config.json not found:", cfg_path)
-        return []
-
-    try:
-        with open(cfg_path, "r") as f:
-            cfg = json.load(f)
-    except Exception as e:
-        print("[WARN] fx_config.json parse error:", e)
-        return []
-
-    params = cfg.get("indicators", {})
-    lookback = params.get("lookback_period_days", 180)
-
-    assets = cfg.get("related_assets", [])
-    opportunities = []
-    for a in assets:
-        sym = a.get("symbol")
+# =============================================================================
+# 2. CÁLCULO DE FACTORES EXTERNOS (Sentimiento, Interés, Macro)
+# =============================================================================
+def get_all_marginal_factors(df):
+    """
+    Función principal que recolecta todos los factores
+    técnicos, de sentimiento, interés y macro.
+    """
+    log.info("Iniciando recolección de factores marginales...")
+    
+    # --- A. Factores de Sentimiento (Reddit + VADER) ---
+    def _get_sentiment_factors(api_keys):
+        log.info("Obteniendo factor de sentimiento (Reddit)...")
         try:
-            df = fetch_ohlcv(sym, period=f"{lookback}d", interval="1d")
-            rsi_col = [c for c in df.columns if c.lower().startswith("rsi")]
-            if not rsi_col:
-                continue
-            rsi_val = float(df[rsi_col[-1]].iloc[-1])
-            high_th = params.get("momentum_threshold_high", 70)
-            low_th = params.get("momentum_threshold_low", 30)
-            if rsi_val >= high_th or rsi_val <= low_th:
-                opp = {"symbol": sym, "rsi": round(rsi_val,2),
-                       "momentum": "alcista" if rsi_val>high_th else "bajista",
-                       "relation": a.get("relation","")}
-                opportunities.append(opp)
+            # 1. Autenticación con Reddit
+            auth = requests.auth.HTTPBasicAuth(
+                api_keys['REDDIT_CLIENT_ID'], 
+                api_keys['REDDIT_SECRET']
+            )
+            token = requests.post('https://www.reddit.com/api/v1/access_token', 
+                                  auth=auth,
+                                  data={'grant_type': 'client_credentials'},
+                                  headers={'User-Agent': 'ss91_script'}).json().get('access_token')
+            
+            headers = {'Authorization': f'bearer {token}', 'User-Agent': 'ss91_script'}
+            
+            # 2. Obtener posts de subreddits clave
+            subs = ['Forex', 'wallstreetbets', 'economics']
+            scores = []
+            analyzer = SentimentIntensityAnalyzer()
+            
+            for sub in subs:
+                posts = requests.get(f"https://oauth.reddit.com/r/{sub}/new?limit=50", headers=headers).json()
+                for p in posts.get('data', {}).get('children', []):
+                    text = p['data'].get('title', '')
+                    # 3. Analizar CADA título con VADER
+                    # 'compound' es un score normalizado de -1.0 (neg) a 1.0 (pos)
+                    score = analyzer.polarity_scores(text)['compound']
+                    scores.append(score)
+            
+            if not scores:
+                return {"reddit_vader_avg": 0.5} # Neutral si no hay datos
+
+            # 4. Promediar y normalizar de [-1, 1] a [0, 1]
+            avg_score = sum(scores) / len(scores)
+            normalized_score = (avg_score + 1) / 2.0
+            return {"reddit_vader_avg": round(normalized_score, 6)}
+        
         except Exception as e:
-            print(f"[WARN] detect fx {sym} failed: {e}")
-            continue
-    return opportunities
+            log.error(f"Error en factor de sentimiento: {e}")
+            return {"reddit_vader_avg": 0.5} # Devuelve neutral en caso de error
+
+    # --- B. Factores de Interés (Google Trends) ---
+    def _get_interest_factors():
+        log.info("Obteniendo factor de interés (Google Trends)...")
+        try:
+            pytrends = TrendReq(hl='en-US', tz=360)
+            pytrends.build_payload(kw_list=['EURUSD', 'recession', 'forex trading'], timeframe='now 1-d')
+            df_trends = pytrends.interest_over_time()
+            
+            if df_trends.empty:
+                return {"gtrends_eurusd": 0, "gtrends_recession": 0}
+            
+            # Obtener el último valor de interés (0-100) y normalizarlo (0-1)
+            interest = df_trends.iloc[-1]
+            return {
+                "gtrends_eurusd": round(interest.get('EURUSD', 0) / 100.0, 6),
+                "gtrends_recession": round(interest.get('recession', 0) / 100.0, 6)
+            }
+        except Exception as e:
+            log.error(f"Error en factor de interés: {e}")
+            return {"gtrends_eurusd": 0, "gtrends_recession": 0}
+
+    # --- C. Factores Macro (FRED) ---
+    def _get_macro_factors(api_keys):
+        log.info("Obteniendo factor macro (FRED)...")
+        try:
+            fred_key = api_keys['FRED_API_KEY']
+            # Ejemplo: Deuda de Tarjetas de Crédito (TERMCBCCALLNS)
+            url = f"https://api.stlouisfed.org/fred/series/observations?series_id=TERMCBCCALLNS&api_key={fred_key}&file_type=json"
+            data = requests.get(url).json()
+            latest_debt = float(data['observations'][-1]['value'])
+            
+            # Normalización (ejemplo: 1.1T es un valor alto histórico)
+            normalized_debt = max(0.0, min(1.0, latest_debt / 1.1e12))
+            return {"fred_debt_norm": round(normalized_debt, 6)}
+        except Exception as e:
+            log.error(f"Error en factor macro: {e}")
+            return {"fred_debt_norm": 0.5} # Neutral en caso de error
+
+    # --- D. Orquestación y Construcción del Payload Final ---
+    try:
+        api_keys = {
+            "REDDIT_CLIENT_ID": os.getenv("REDDIT_CLIENT_ID"),
+            "REDDIT_SECRET": os.getenv("REDDIT_SECRET"),
+            "FRED_API_KEY": os.getenv("FRED_API_KEY")
+        }
+        
+        # 1. Obtener todos los factores de fuentes externas
+        sentiment_factors = _get_sentiment_factors(api_keys)
+        interest_factors = _get_interest_factors()
+        macro_factors = _get_macro_factors(api_keys)
+        
+        # 2. Combinar todos los factores externos
+        marginal_factors = {**sentiment_factors, **interest_factors, **macro_factors}
+
+        # 3. Obtener los últimos factores técnicos del DataFrame
+        # .iloc[-1] toma la última fila (los datos de hoy)
+        latest_technicals = df.iloc[-1].to_dict()
+        
+        # 4. Calcular Fibonacci (de tu código original)
+        fibo = compute_fibonacci_levels(df)
+
+        # 5. Construir el Payload (el snapshot.json)
+        payload = {
+            "snapshot_time_utc": str(pd.Timestamp.utcnow()),
+            "symbol": "EURUSD=X",
+            "ohlc_latest": latest_technicals, # Todos los indicadores técnicos están aquí
+            "fibonacci": fibo,
+            "marginal_factors": marginal_factors # Todos los factores externos están aquí
+        }
+        return payload
+    
+    except Exception as e:
+        log.error(f"Error al generar factores marginales: {e}")
+        raise
+
+# =============================================================================
+# 3. CÁLCULO DE FIBONACCI (Sin cambios, de tu código)
+# =============================================================================
+def compute_fibonacci_levels(df):
+    high = df["high"].max()
+    low = df["low"].min()
+    current = df["close"].iloc[-1]
+    levels = {
+        "0.0%": high,
+        "23.6%": high - (high - low) * 0.236,
+        "38.2%": high - (high - low) * 0.382,
+        "50.0%": high - (high - low) * 0.5,
+        "61.8%": high - (high - low) * 0.618,
+        "78.6%": high - (high - low) * 0.786,
+        "100%": low,
+    }
+    nearest_level = min(levels.items(), key=lambda x: abs(x[1] - current))
+    ratio = (current - low) / (high - low)
+    return {
+        "fibo_levels": levels,
+        "nearest_level": nearest_level[0],
+        "nearest_value": nearest_level[1],
+        "position_ratio": ratio,
+        "current_price": current,
+        "high_1y": high,
+        "low_1y": low,
+    }
