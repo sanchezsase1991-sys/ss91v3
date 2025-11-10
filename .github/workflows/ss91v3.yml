@@ -8,7 +8,7 @@ on:
     inputs:
       run_mode:
         description: "Modo de ejecución"
-        required: false
+        required: true
         default: "manual"
         type: choice
         options:
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
       - name: Install dependencies
         run: |
           pip install --upgrade pip
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
       - name: Install dependencies
         run: |
           pip install --upgrade pip
