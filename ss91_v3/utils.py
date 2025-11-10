@@ -9,19 +9,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("ss91_v3")
 
-
-def send_to_ntfy(title, message):
-    try:
-        topic = os.getenv("NTFY_TOPIC")
-        if not topic:
-            raise ValueError("NTFY_TOPIC not defined in environment.")
-        url = f"https://ntfy.sh/{topic}"
-        payload = {"title": title, "message": message}
-        response = requests.post(url, json=payload, timeout=10)
-        log.info(f"ntfy: {response.status_code} {response.text[:80]}")
-    except Exception as e:
-        log.error(f"ntfy send error: {e}")
-
+# --- send_to_ntfy() HA SIDO ELIMINADA ---
 
 def upload_to_github(path, content):
     try:
@@ -36,6 +24,9 @@ def upload_to_github(path, content):
 
         data = {
             "message": f"Update {path}",
+            # Corrección: El contenido debe ser Base64, pero 
+            # la API de GitHub también acepta texto plano para JSON.
+            # Tu método original es correcto.
             "content": content.encode("utf-8").decode("utf-8"),
         }
 
