@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os, json, logging
 from datetime import datetime
 from dotenv import load_dotenv
@@ -71,29 +70,23 @@ def main():
             "timestamp": datetime.utcnow().isoformat()
         }
 
-        # ensure results/decisions directory exists
-os.makedirs(RESULTS_DIR, exist_ok=True)
-
-local_path = os.path.join(RESULTS_DIR, f"{today}.json")
-try:
-    with open(local_path, "w", encoding="utf-8") as f:
-        json.dump(decision_record, f, indent=2, ensure_ascii=False)
-    log.info(f"Decision JSON saved locally at {local_path}")
-except Exception as e:
-    log.error(f"Error saving decision locally: {e}")
+        # save local
+        local_path = os.path.join(RESULTS_DIR, f"{today}.json")
+        with open(local_path, "w") as f:
+            json.dump(decision_record, f, indent=2)
 
         # upload json to github
         upload_to_github(f"decisions/{today}.json", json.dumps(decision_record, indent=2))
 
         # consolidate message and send once
-        full_msg = f"🧠 SS91-V3 Decision {today}\n\n{context_msg}\nDecision: {decision_raw}\n{opp_text}"
-        send_to_ntfy(f"SS91-V3 Diario {today}", full_msg)
+        full_msg = f"🧠 ss91_alertas Decision {today}\n\n{context_msg}\nDecision: {decision_raw}\n{opp_text}"
+        send_to_ntfy(f"ss91_alertas Diario {today}", full_msg)
 
         log.info("Decision processed and notified.")
 
     except Exception as e:
         log.error("Decitor processing error: %s", e)
-        send_to_ntfy("SS91-V3 Error", f"Decitor failed: {e}")
+        send_to_ntfy("ss91_alertas Error", f"Decitor failed: {e}")
 
 if __name__ == "__main__":
     main()
