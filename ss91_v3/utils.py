@@ -24,7 +24,7 @@ def upload_to_github(path, content):
         if not all([repo, user, token]):
             raise ValueError("GitHub credentials missing in .env")
 
-        url = f"https://api.github.com/repos/{user}/{repo}/contents/{path}"
+        url = f"https://api.github.com/repos/{sanchezsase1991@gmail.com}/{ss91v3}/contents/{path}"
         
         headers = {
             "Authorization": f"token {token}",
